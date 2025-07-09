@@ -72,7 +72,12 @@ class WebPDFExporter(HTMLExporter):
 
         async def main(temp_file):
             """Run main playwright script."""
+            print("Playwright run started")
             args = ["--no-sandbox"] if self.disable_sandbox else []
+            args.append("--single-process")
+            args.append("--disable-gpu")
+            args.append("--disable-dev-shm-usage")
+            args.append("--disable-features=VizDisplayCompositor")
             try:
                 from playwright.async_api import async_playwright  # type: ignore[import-not-found]
             except ModuleNotFoundError as e:
@@ -86,14 +91,23 @@ class WebPDFExporter(HTMLExporter):
                 cmd = [sys.executable, "-m", "playwright", "install", "chromium"]
                 subprocess.check_call(cmd)  # noqa: S603
 
+            print("Starting playwright")
             playwright = await async_playwright().start()
+            print("Started playwright")
             chromium = playwright.chromium
+            print("Got chromium")
 
             try:
+                print("Launching browser", args)
                 browser = await chromium.launch(
-                    handle_sigint=False, handle_sigterm=False, handle_sighup=False, args=args
+                    handle_sigint=False,
+                    handle_sigterm=False,
+                    handle_sighup=False,
+                    args=args,
                 )
+                print("Launched browser")
             except Exception as e:
+                print("Error launching browser:", e)
                 msg = (
                     "No suitable chromium executable found on the system. "
                     "Please use '--allow-chromium-download' to allow downloading one,"
@@ -102,9 +116,12 @@ class WebPDFExporter(HTMLExporter):
                 await playwright.stop()
                 raise RuntimeError(msg) from e
 
+            print("Getting new page")
             page = await browser.new_page()
+            print("Got page")
             await page.emulate_media(media="print")
             await page.wait_for_timeout(100)
+            print("Going to file")
             await page.goto(f"file://{temp_file.name}", wait_until="domcontentloaded")
             await page.wait_for_timeout(100)
 
@@ -132,8 +149,14 @@ class WebPDFExporter(HTMLExporter):
                 )
             pdf_data = await page.pdf(**pdf_params)
 
-            await browser.close()
-            await playwright.stop()
+            try:
+                await browser.close()
+            except Exception:
+                pass
+            try:
+                await playwright.stop()
+            except Exception:
+                pass
             return pdf_data
 
         # Create a temporary file to pass the HTML code to Chromium:
