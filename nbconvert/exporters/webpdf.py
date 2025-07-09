@@ -4,7 +4,6 @@
 # Distributed under the terms of the Modified BSD License.
 
 import asyncio
-import concurrent.futures
 import os
 import subprocess
 import sys
@@ -137,7 +136,6 @@ class WebPDFExporter(HTMLExporter):
             await playwright.stop()
             return pdf_data
 
-        pool = concurrent.futures.ThreadPoolExecutor()
         # Create a temporary file to pass the HTML code to Chromium:
         # Unfortunately, tempfile on Windows does not allow for an already open
         # file to be opened by a separate process. So we must close it first
@@ -149,20 +147,16 @@ class WebPDFExporter(HTMLExporter):
         with temp_file:
             temp_file.write(html.encode("utf-8"))
         try:
-            # TODO: when dropping Python 3.6, use
-            # pdf_data = pool.submit(asyncio.run, main(temp_file)).result()
-            def run_coroutine(coro):
-                """Run an internal coroutine."""
-                loop = (
-                    asyncio.ProactorEventLoop()  # type:ignore[attr-defined]
-                    if IS_WINDOWS
-                    else asyncio.new_event_loop()
-                )
-
-                asyncio.set_event_loop(loop)
-                return loop.run_until_complete(coro)
-
-            pdf_data = pool.submit(run_coroutine, main(temp_file)).result()
+            loop = (
+                asyncio.ProactorEventLoop()  # type:ignore[attr-defined]
+                if IS_WINDOWS
+                else asyncio.new_event_loop()
+            )
+            asyncio.set_event_loop(loop)
+            try:
+                pdf_data = loop.run_until_complete(main(temp_file))
+            finally:
+                loop.close()
         finally:
             # Ensure the file is deleted even if playwright raises an exception
             os.unlink(temp_file.name)
