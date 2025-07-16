@@ -68,7 +68,7 @@ class WebPDFExporter(HTMLExporter):
         """,
     ).tag(config=True)
 
-    playwright_args = List(
+    browser_args = List(
         Unicode(),
         help="""
         Additional arguments to pass to the Playwright browser launch.
@@ -83,7 +83,7 @@ class WebPDFExporter(HTMLExporter):
 
         async def main(temp_file):
             """Run main playwright script."""
-            args = self.playwright_args
+            args = self.browser_args
             if self.disable_sandbox:
                 args.append("--no-sandbox")
             try:
